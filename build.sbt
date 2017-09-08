@@ -8,3 +8,8 @@ lazy val root = (project in file(".")).enablePlugins(PlayJava)
 scalaVersion := "2.12.2"
 
 libraryDependencies += guice
+
+//JDBC Dependencies
+libraryDependencies += javaJdbc
+libraryDependencies += "org.xerial" % "sqlite-jdbc" % "3.20.0"
+libraryDependencies += "com.google.code.gson" % "gson" % "2.2.4"

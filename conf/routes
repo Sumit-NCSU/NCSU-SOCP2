@@ -8,20 +8,40 @@ GET     /                                      controllers.HomeController.index
 # Map static resources from the /public folder to the /assets URL path
 GET     /assets/*file                          controllers.Assets.versioned(path="/public", file: Asset)
 
+# Sample Actor
+GET 	/actor/:message							controllers.BookingController.useActor(message: String)
+
+##
+#Airline APIs
+##
+
 # Get a list of trips booked.
-GET     /trips                                 controllers.HomeController.getTrips
+GET     /trips                                 controllers.BookingController.getTrips
 
 # Get a list of segments of a trip. A segment is represented by its flight.
-GET     /trips/:tripID                         controllers.HomeController.getSegments(tripID: String)
+GET     /trips/:tripID                         controllers.BookingController.getSegments(tripID: String)
 
 # Get a list of airline operators.
-GET     /operators                             controllers.HomeController.getOperators
+GET     /operators                             controllers.BookingController.getOperators
 
 # Get a list of flights operated by an airline operator.
-GET     /operators/:operator/flights           controllers.HomeController.getFlights(operator: String)
+GET     /operators/:operator/flights           controllers.BookingController.getFlights(operator: String)
 
 # Get the number of available seats on a flight.
-GET     /operators/:operator/flights/:flight   controllers.HomeController.getSeats(operator: String, flight: String)
+GET     /operators/:operator/flights/:flight   controllers.BookingController.getSeats(operator: String, flight: String)
 
 # Book a trip. Currently, the $from and $to should always be X and Y. If not, return an error.
-POST    /trip/:from/:to                        controllers.HomeController.bookTrip(from: String, to: String)
+POST    /trip/:from/:to                        controllers.BookingController.bookTrip(from: String, to: String)
+
+##
+#Debug APIs
+##
+
+# After this request is posted, corresponding airline actor will reply fail to subsequent Confirm requests without actual processing
+POST	/actor/:airline/confirm_fail			controllers.BookingController.confirmFail(airline: String)
+
+# After this request is posted, corresponding airline actor will not reply to subsequent Confirm requests without actual processing
+POST	/actor/:airline/confirm_no_response		controllers.BookingController.confirmNoResponse(airline: String)
+
+# After this request is posted, the actor will reset to normal
+POST	/actor/:airline/reset					controllers.BookingController.reset(airline: String)

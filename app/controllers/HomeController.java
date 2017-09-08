@@ -19,28 +19,4 @@ public class HomeController extends Controller {
 		return ok(views.html.index.render());
 	}
 
-	public Result getSeats(String operator, String flight) {
-		return ok("operator: " + operator + ", flight: " + flight);
-	}
-
-	public Result getTrips() {
-		return ok("trips: a, b, c, d, e");
-	}
-
-	public Result getSegments(String tripID) {
-		return ok("tripID: " + tripID);
-	}
-
-	public Result getOperators() {
-		return ok("operators: a, b, c, d, e");
-	}
-
-	public Result getFlights(String operator) {
-		return ok("operator: " + operator);
-	}
-
-	public Result bookTrip(String from, String to) {
-		return ok("from: " + from + ", to: " + to);
-	}
-
 }
