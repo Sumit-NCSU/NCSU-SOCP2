@@ -1,6 +1,7 @@
 package controllers;
 
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
 import javax.inject.Inject;
@@ -10,8 +11,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.gson.Gson;
 
 import actors.AirlineActor;
-import actors.AirlineActorProtocol.Confirm;
-import actors.AirlineActorProtocol.Hold;
+import actors.AirlineActorProtocol.DebugFlag;
 import actors.BookingActor;
 import actors.BookingActorProtocol.BookFlight;
 import akka.actor.ActorRef;
@@ -39,10 +39,10 @@ public class BookingController extends Controller {
 	public BookingController(ActorSystem system, DatabaseService databaseService) {
 		this.system = system;
 		this.databaseService = databaseService;
-		aaActor = system.actorOf(AirlineActor.getProps("AA"));
-		baActor = system.actorOf(AirlineActor.getProps("BA"));
-		caActor = system.actorOf(AirlineActor.getProps("CA"));
-		bookingActor = system.actorOf(BookingActor.getProps(aaActor, baActor, caActor));
+		aaActor = system.actorOf(AirlineActor.getProps("AA", AirlineActor.NORMAL, databaseService));
+		baActor = system.actorOf(AirlineActor.getProps("BA", AirlineActor.NORMAL, databaseService));
+		caActor = system.actorOf(AirlineActor.getProps("CA", AirlineActor.NORMAL, databaseService));
+		bookingActor = system.actorOf(BookingActor.getProps(aaActor, baActor, caActor, databaseService));
 		databaseService.initializeDatabase();
 	}
 
@@ -57,17 +57,6 @@ public class BookingController extends Controller {
 	// return FutureConverters.toJava(ask(airlineActor, new Airline(name),
 	// 1000)).thenApply(response -> ok((String) response));
 	// }
-
-	public CompletionStage<Result> useActor(String message) {
-		Object messageType = null;
-		if ("hold".equalsIgnoreCase(message)) {
-			messageType = new Hold();
-		} else if ("confirm".equalsIgnoreCase(message)) {
-			messageType = new Confirm();
-		}
-		return FutureConverters.toJava(Patterns.ask(aaActor, messageType, 1000))
-				.thenApply(response -> ok((String) response));
-	}
 
 	/**
 	 * Get a list of trips booked.
@@ -97,7 +86,7 @@ public class BookingController extends Controller {
 			result.put("message", "No segments found for Trip ID: " + tripID);
 			return ok(result);
 		} else {
-			String[] segmentArray = segments.split("-");
+			String[] segmentArray = segments.trim().split(" ");
 			ObjectNode result = Json.newObject();
 			result.put("status", "success");
 			result.put("segments", new Gson().toJson(segmentArray));
@@ -173,12 +162,13 @@ public class BookingController extends Controller {
 	 */
 	public CompletionStage<Result> bookTrip(String from, String to) {
 		if (!"X".equals(from) || !"Y".equals(to)) {
-			return badRequest("From and To should be 'X' and 'Y' respectively");
+			return CompletableFuture
+					.completedFuture(ok(createJsonResponse("error", "From and To should be 'X' and 'Y' respectively")));
 		} else {
 			// call booking actor
 			// return bookingActor.tell(new BookFlight(from, to), ActorRef.noSender());
-			FutureConverters.toJava(ask(bookingActor, new BookFlight(from, to), 1000))
-					.thenApply(response -> ok((String) response));
+			return FutureConverters.toJava(Patterns.ask(bookingActor, new BookFlight(from, to), 5000))
+					.thenApply(response -> ok(createJsonResponse("success", (String) response)));
 		}
 		// return ok("from: " + from + ", to: " + to);
 	}
@@ -192,7 +182,26 @@ public class BookingController extends Controller {
 	 * @return
 	 */
 	public Result confirmFail(String airline) {
-		return ok("airline: " + airline);
+		System.out.println("DebugAPI: Fail request recieved for airline: " + airline);
+		DebugFlag flg = new DebugFlag(AirlineActor.FAIL);
+		ObjectNode result = Json.newObject();
+		result.put("status", "success");
+		switch (airline) {
+		case "AA":
+			aaActor.tell(flg, ActorRef.noSender());
+			break;
+		case "BA":
+			baActor.tell(flg, ActorRef.noSender());
+			break;
+		case "CA":
+			caActor.tell(flg, ActorRef.noSender());
+			break;
+		default:
+			System.out.println("Invalid Airline: " + airline);
+			result.put("status", "error");
+			result.put("message", "invalid airline: " + airline);
+		}
+		return ok(result);
 	}
 
 	/**
@@ -204,7 +213,26 @@ public class BookingController extends Controller {
 	 * @return
 	 */
 	public Result confirmNoResponse(String airline) {
-		return ok("airline: " + airline);
+		System.out.println("DebugAPI: No Response request recieved for airline: " + airline);
+		DebugFlag flg = new DebugFlag(AirlineActor.NO_REPLY);
+		ObjectNode result = Json.newObject();
+		result.put("status", "success");
+		switch (airline) {
+		case "AA":
+			aaActor.tell(flg, ActorRef.noSender());
+			break;
+		case "BA":
+			baActor.tell(flg, ActorRef.noSender());
+			break;
+		case "CA":
+			caActor.tell(flg, ActorRef.noSender());
+			break;
+		default:
+			System.out.println("Invalid Airline: " + airline);
+			result.put("status", "error");
+			result.put("message", "invalid airline: " + airline);
+		}
+		return ok(result);
 	}
 
 	/**
@@ -215,7 +243,49 @@ public class BookingController extends Controller {
 	 * @return
 	 */
 	public Result reset(String airline) {
-		return ok("airline: " + airline);
+		System.out.println("DebugAPI: Reset request recieved for airline: " + airline);
+		ObjectNode result = Json.newObject();
+		result.put("status", "success");
+		DebugFlag flg = new DebugFlag(AirlineActor.NORMAL);
+		switch (airline) {
+		case "AA":
+			aaActor.tell(flg, ActorRef.noSender());
+			break;
+		case "BA":
+			baActor.tell(flg, ActorRef.noSender());
+			break;
+		case "CA":
+			caActor.tell(flg, ActorRef.noSender());
+			break;
+		default:
+			System.out.println("Invalid Airline: " + airline);
+			result.put("status", "error");
+			result.put("message", "invalid airline: " + airline);
+		}
+		return ok(result);
+	}
+
+	public Result resetdb() {
+		System.out.println("Resetting database.");
+		ObjectNode result = Json.newObject();
+		if (databaseService.resetDatabase()) {
+			System.out.println("Database Reset");
+			result.put("status", "success");
+			result.put("message", "Database reset to initial state");
+			return ok(result);
+		} else {
+			System.out.println("Failed to reset Database");
+			result.put("status", "error");
+			result.put("message", "Failed to reset the database");
+			return ok(result);
+		}
+	}
+
+	private ObjectNode createJsonResponse(String status, String response) {
+		ObjectNode result = Json.newObject();
+		result.put("status", status);
+		result.put("tripID", response);
+		return result;
 	}
 
 }

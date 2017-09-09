@@ -8,9 +8,6 @@ GET     /                                      controllers.HomeController.index
 # Map static resources from the /public folder to the /assets URL path
 GET     /assets/*file                          controllers.Assets.versioned(path="/public", file: Asset)
 
-# Sample Actor
-GET 	/actor/:message							controllers.BookingController.useActor(message: String)
-
 ##
 #Airline APIs
 ##
@@ -45,3 +42,6 @@ POST	/actor/:airline/confirm_no_response		controllers.BookingController.confirmN
 
 # After this request is posted, the actor will reset to normal
 POST	/actor/:airline/reset					controllers.BookingController.reset(airline: String)
+
+# Once this request is posted, the database will be reset to its initial State. (i.e. all the flight bookings will be deleted and the available seats will return to default)
+POST	/resetdb								controllers.BookingController.resetdb

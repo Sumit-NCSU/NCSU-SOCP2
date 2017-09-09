@@ -34,26 +34,7 @@ public class DatabaseService {
 		Connection con = null;
 		try {
 			con = db.getConnection();
-
-			List<String> tableList = getTables(con);
-			boolean insertOperators = true, insertFlights = true;
-			for (String item : tableList) {
-				System.out.println("Table Entry : " + item);
-			}
-			if (tableList.contains("operators")) {
-				insertOperators = false;
-			} else {
-				System.out.println("Will insert operators");
-			}
-			if (tableList.contains("flights")) {
-				insertFlights = false;
-			} else {
-				System.out.println("Will insert flights");
-			}
-			if (createOperators(con, insertOperators)) {
-				System.out.println("Successfully initialized operators");
-			}
-			if (createFlights(con, insertFlights)) {
+			if (createFlights(con, flightsExists(con))) {
 				System.out.println("Successfully initialized flights");
 			}
 			if (createBookings(con)) {
@@ -66,6 +47,7 @@ public class DatabaseService {
 				try {
 					con.close();
 				} catch (SQLException e) {
+					System.out.println("Error while closing the database connection from initialize database method");
 					e.printStackTrace();
 				}
 			}
@@ -141,7 +123,7 @@ public class DatabaseService {
 
 	public List<String> fetchOperators() {
 		List<String> operators = new ArrayList<String>();
-		String fetchOperatorsQuery = "SELECT name from operators";
+		String fetchOperatorsQuery = "SELECT DISTINCT operator as name from flights";
 		Connection con = null;
 		try {
 			con = db.getConnection();
@@ -174,7 +156,7 @@ public class DatabaseService {
 
 	public List<String> fetchOperatorFlights(String operator) {
 		List<String> operatorFlights = new ArrayList<String>();
-		String fetchOperatorFlightsQuery = "SELECT flights.name name from flights where operator_id in (select id from operators where name = ?)";
+		String fetchOperatorFlightsQuery = "SELECT flights.name name from flights where operator = ?";
 		Connection con = null;
 		try {
 			con = db.getConnection();
@@ -208,7 +190,7 @@ public class DatabaseService {
 
 	public int fetchAvailableSeats(String operator, String flight) {
 		int availableSeats = 0;
-		String fetchAvailableSeatsQuery = "SELECT available_seats from flights where operator_id in (select id from operators where name = ?) and flights.name = ?";
+		String fetchAvailableSeatsQuery = "SELECT available_seats from flights where operator = ? and name = ?";
 		Connection con = null;
 		try {
 			con = db.getConnection();
@@ -243,65 +225,183 @@ public class DatabaseService {
 		return availableSeats;
 	}
 
-	private List<String> getTables(Connection con) {
-		List<String> tableList = new ArrayList<String>();
-		String checkTables = "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('operators','flights')";
+	/**
+	 * This method will try to hold a seat in the database for a given flight,
+	 * operated by a given airline. If no such flight is found, or if there are no
+	 * available seats, the method will return false.
+	 * 
+	 * @param airline
+	 *            the airline
+	 * @param flight
+	 *            the flight name
+	 * @param holdTime
+	 *            the time at which the hold request is received.
+	 * @return
+	 */
+	public String tryHoldSeat(String airline, String flight) {
+		System.out.println("Trying to hold a seat for flight: " + flight + ", operated by: " + airline);
+		String tripId = String.valueOf(System.currentTimeMillis());
+		Connection con = null;
+		try {
+			con = db.getConnection();
+			// check if seat is available
+			String checkSeats = "SELECT available_seats FROM flights WHERE operator=? AND name=?";
+			PreparedStatement selectStatement = con.prepareStatement(checkSeats);
+			selectStatement.setString(1, airline);
+			selectStatement.setString(2, flight);
+			ResultSet rs = selectStatement.executeQuery();
+			rs.next();
+			int availableSeats = rs.getInt("available_seats");
+			System.out.println(
+					"There are " + availableSeats + " available for flight: " + flight + ", operated by: " + airline);
+			if (availableSeats > 0) {
+				// hold a seat
+				String holdSeat = "UPDATE flights set available_seats = available_seats-1, hold_time=? where operator=? AND name=?";
+				PreparedStatement updateStatement = con.prepareStatement(holdSeat);
+				updateStatement.setString(1, tripId);
+				updateStatement.setString(2, airline);
+				updateStatement.setString(3, flight);
+				updateStatement.executeUpdate();
+			} else {
+				System.out.println("No seats available for flight: " + flight + ", operated by: " + airline);
+				return "";
+			}
+		} catch (Exception e) {
+			System.out.println("Error while trying to hold a seat for flight: " + flight + ", operated by: " + airline);
+			e.printStackTrace();
+			return "";
+		} finally {
+			if (con != null) {
+				try {
+					con.close();
+				} catch (SQLException e) {
+					System.out.println("Error while closing the connection from try hold seat method");
+					e.printStackTrace();
+				}
+			}
+		}
+		return tripId;
+	}
+
+	/**
+	 * This method confirms the seats in the database. It also clears the hold flag
+	 * in the database once the confirm is complete.
+	 * 
+	 * @param airline
+	 *            the airline operator
+	 * @param flight
+	 *            the flight name
+	 * @param tripId
+	 *            the trip ID same as the transaction ID which was used to hold the
+	 *            seats.
+	 * @return
+	 */
+	public String tryConfirmSeat(String airline, String flight, String tripId) {
+		Connection con = null;
+		try {
+			con = db.getConnection();
+			String selectQuery = "SELECT count(*) as booked from bookings where id = ?";
+			PreparedStatement selectStatement = con.prepareStatement(selectQuery);
+			selectStatement.setLong(1, Long.valueOf(tripId));
+			ResultSet rs = selectStatement.executeQuery();
+			rs.next();
+			boolean entryExists = (rs.getInt("booked") > 0);
+			int status = 0;
+			if (entryExists) {
+				// String concatenation in Sqlite is ||
+				String updateQuery = "UPDATE bookings set schedule=schedule || ? where id = ?";
+				PreparedStatement updateStatement = con.prepareStatement(updateQuery);
+				updateStatement.setString(1, flight.concat(" "));
+				updateStatement.setLong(2, Long.valueOf(tripId));
+				status = updateStatement.executeUpdate();
+			} else {
+				String insertQuery = "INSERT INTO bookings (id, schedule) values (?, ?)";
+				PreparedStatement insertStatement = con.prepareStatement(insertQuery);
+				insertStatement.setLong(1, Long.valueOf(tripId));
+				insertStatement.setString(2, flight.concat(" "));
+				status = insertStatement.executeUpdate();
+			}
+			if (status > 0) {
+				System.out.println("Confirm seat successfully");
+				// reset the hold flag of the flight.
+				String updateQuery = "UPDATE flights set hold_time=null where name = ?";
+				PreparedStatement updateStatement = con.prepareStatement(updateQuery);
+				updateStatement.setString(1, flight);
+				status = updateStatement.executeUpdate();
+				System.out.println("The previous hold flag was released");
+			} else {
+				System.out.println("Could not confirm seat for flight: " + flight + ", with transactionID: " + tripId);
+				tripId = "";
+			}
+		} catch (Exception e) {
+			System.out.println(
+					"Error while trying to confirm a seat for flight: " + flight + ", with transactionID: " + tripId);
+			e.printStackTrace();
+			tripId = "";
+		} finally {
+			if (con != null) {
+				try {
+					con.close();
+				} catch (SQLException e) {
+					System.out.println("Error while closing the connection from try confirm seat method");
+					e.printStackTrace();
+				}
+			}
+		}
+		return tripId;
+	}
+
+	/**
+	 * This method is used to reset the database back to its original configuration
+	 * 
+	 * @return
+	 */
+	public boolean resetDatabase() {
+		boolean status = true;
+		String dropBookings = "DROP TABLE bookings";
+		String dropFlights = "DROP TABLE flights";
+		Connection con = null;
+		try {
+			con = db.getConnection();
+			Statement st = con.createStatement();
+			st.executeUpdate(dropBookings);
+			st.executeUpdate(dropFlights);
+			createFlights(con, true);
+			createBookings(con);
+		} catch (Exception e) {
+			e.printStackTrace();
+			status = false;
+		} finally {
+			if (con != null) {
+				try {
+					con.close();
+				} catch (SQLException e) {
+					System.out.println("Error while closing the database connection from reset database method");
+					e.printStackTrace();
+				}
+			}
+		}
+		return status;
+	}
+
+	/**
+	 * This method checks if flights table already exists.
+	 * 
+	 * @param con
+	 *            the database connection
+	 * @return
+	 */
+	private boolean flightsExists(Connection con) {
+		String checkTables = "SELECT name FROM sqlite_master WHERE type='table' AND name = 'flights'";
 		try (PreparedStatement pstmt = con.prepareStatement(checkTables)) {
 			ResultSet rs = pstmt.executeQuery();
-			while (rs.next()) {
-				tableList.add(rs.getString("name"));
-			}
+			rs.next();
+			return !"flights".equalsIgnoreCase(rs.getString("name"));
 		} catch (Exception e) {
 			System.out.println("Error while fetching table list.");
 			e.printStackTrace();
 		}
-		return tableList;
-	}
-
-	/**
-	 * This method creates the table for Possible values for debug_flag are:
-	 * <li>'Normal' for Normal (i.e. normal operation for the actor of the
-	 * corresponding airline operator if this flag value is set.)
-	 * <li>'Fail' for Fail Reply (i.e. the actor of the corresponding airline
-	 * operator will reply Fail without processing if this flag value is set.)
-	 * <li>'NoReply' for No Reply (i.e. the actor of the corresponding airline
-	 * operator will not reply if this flag value is set.)
-	 * 
-	 * @param con
-	 *            the database connection.
-	 * @param insertRecords
-	 * @return
-	 */
-	private boolean createOperators(Connection con, boolean insertRecords) {
-		String createTable = "CREATE TABLE IF NOT EXISTS operators (id integer PRIMARY KEY, name text NOT NULL, debug_flag text)";
-		boolean status = false;
-		try {
-			Statement stmt = con.createStatement();
-			stmt.execute(createTable);
-			status = true;
-			if (insertRecords) {
-				System.out.println("Created Table Operators");
-				System.out.println("Inserting Data into Operators");
-				List<String> insertStatements = new ArrayList<String>();
-				insertStatements.add("INSERT INTO operators (id, name, debug_flag) values (1, 'AA','Normal')");
-				insertStatements.add("INSERT INTO operators (id, name, debug_flag) values (2, 'BA','Normal')");
-				insertStatements.add("INSERT INTO operators (id, name, debug_flag) values (3, 'CA','Normal')");
-				for (String insertStatement : insertStatements) {
-					try (PreparedStatement pstmt = con.prepareStatement(insertStatement)) {
-						int recordsInserted = pstmt.executeUpdate();
-						status = status && (recordsInserted > 0);
-					} catch (Exception e) {
-						System.out.println(
-								"Error while inserting daat for operators, for Insert statement: " + insertStatement);
-						e.printStackTrace();
-					}
-				}
-			}
-		} catch (SQLException e) {
-			System.out.println("Error while creating operators");
-			e.printStackTrace();
-		}
-		return status;
+		return false;
 	}
 
 	/**
@@ -311,7 +411,7 @@ public class DatabaseService {
 	 * @return
 	 */
 	private boolean createFlights(Connection con, boolean insertRecords) {
-		String createTable = "CREATE TABLE IF NOT EXISTS flights (id integer PRIMARY KEY, name text NOT NULL, operator_id integer, total_seats integer, available_seats integer, route text)";
+		String createTable = "CREATE TABLE IF NOT EXISTS flights (id integer PRIMARY KEY, name text NOT NULL, operator text, total_seats integer, available_seats integer, route text, hold_time text)";
 		boolean status = false;
 		try {
 			Statement stmt = con.createStatement();
@@ -322,22 +422,22 @@ public class DatabaseService {
 				System.out.println("Inserting Data into Flights");
 				List<String> insertStatements = new ArrayList<String>();
 				insertStatements.add(
-						"INSERT INTO flights (name, operator_id, total_seats, available_seats, route) values ('AA001',1,3,3,'X-Z')");
+						"INSERT INTO flights (name, operator, total_seats, available_seats, route) values ('AA001','AA',3,3,'X-Z')");
 				insertStatements.add(
-						"INSERT INTO flights (name, operator_id, total_seats, available_seats, route) values ('AA002',1,1,1,'W-Y')");
+						"INSERT INTO flights (name, operator, total_seats, available_seats, route) values ('AA002','AA',1,1,'W-Y')");
 				insertStatements.add(
-						"INSERT INTO flights (name, operator_id, total_seats, available_seats, route) values ('BA001',2,1,1,'Z-Y')");
+						"INSERT INTO flights (name, operator, total_seats, available_seats, route) values ('BA001','BA',1,1,'Z-Y')");
 				insertStatements.add(
-						"INSERT INTO flights (name, operator_id, total_seats, available_seats, route) values ('CA001',3,1,1,'X-Y')");
+						"INSERT INTO flights (name, operator, total_seats, available_seats, route) values ('CA001','CA',1,1,'X-Y')");
 				insertStatements.add(
-						"INSERT INTO flights (name, operator_id, total_seats, available_seats, route) values ('CA001',3,1,1,'Z-W')");
+						"INSERT INTO flights (name, operator, total_seats, available_seats, route) values ('CA002','CA',1,1,'Z-W')");
 				for (String insertStatement : insertStatements) {
 					try (PreparedStatement pstmt = con.prepareStatement(insertStatement)) {
 						int recordsInserted = pstmt.executeUpdate();
 						status = status && (recordsInserted > 0);
 					} catch (Exception e) {
 						System.out.println(
-								"Error while inserting daat for flights, for Insert statement: " + insertStatement);
+								"Error while inserting data for flights, for Insert statement: " + insertStatement);
 						e.printStackTrace();
 					}
 				}
@@ -354,13 +454,11 @@ public class DatabaseService {
 	/**
 	 * 
 	 * @param con
-	 * @param insertRecords
 	 * @return
 	 */
 	private boolean createBookings(Connection con) {
-		System.out.println("Creating Table Bookings");
-		// from and to are keywords in sqlite use '' to escape
-		String createTable = "CREATE TABLE IF NOT EXISTS bookings (id integer PRIMARY KEY, 'from' text NOT NULL, 'to' text NOT NULL, schedule text)";
+		System.out.println("Creating Table Bookings if not already created.");
+		String createTable = "CREATE TABLE IF NOT EXISTS bookings (id integer PRIMARY KEY, schedule text)";
 		try (Statement stmt = con.createStatement()) {
 			stmt.execute(createTable);
 			return true;
