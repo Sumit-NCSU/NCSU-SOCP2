@@ -48,7 +48,6 @@ public class BookingController extends Controller {
 		baActor = system.actorOf(AirlineActor.getProps("BA", AirlineActor.NORMAL, databaseService));
 		caActor = system.actorOf(AirlineActor.getProps("CA", AirlineActor.NORMAL, databaseService));
 		bookingActor = system.actorOf(BookingActor.getProps(aaActor, baActor, caActor, databaseService));
-		databaseService.initializeDatabase();
 		LOG.debug("Initialized Booking Controller");
 	}
 
@@ -141,8 +140,6 @@ public class BookingController extends Controller {
 			return CompletableFuture
 					.completedFuture(ok(createErrorResponse("From and To should be 'X' and 'Y' respectively")));
 		} else {
-			// catch the timeout exception here to do the error handling for the booking
-			// actor
 			return FutureConverters.toJava(Patterns.ask(bookingActor, new BookFlight(from, to), 5000))
 					.thenApply(response -> parseResponse((String) response));
 		}

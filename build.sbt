@@ -13,3 +13,4 @@ libraryDependencies += guice
 libraryDependencies += javaJdbc
 libraryDependencies += "org.xerial" % "sqlite-jdbc" % "3.20.0"
 libraryDependencies += "com.google.code.gson" % "gson" % "2.2.4"
+libraryDependencies += "com.typesafe.akka" %% "akka-actor" % "2.4.0"

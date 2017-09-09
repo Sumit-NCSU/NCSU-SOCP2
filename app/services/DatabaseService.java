@@ -30,6 +30,7 @@ public class DatabaseService {
 		LOG.debug("Initializing Database service");
 		this.db = db;
 		this.executionContext = executionContext;
+		initializeDatabase();
 		LOG.debug("Initialized Database service");
 	}
 
@@ -107,8 +108,11 @@ public class DatabaseService {
 			try (PreparedStatement selectStatement = con.prepareStatement(selectQuery)) {
 				selectStatement.setString(1, tripId);
 				ResultSet rs = selectStatement.executeQuery();
-				rs.next();
-				segments = rs.getString("schedule");
+				if (rs.next()) {
+					segments = rs.getString("schedule");
+				} else {
+					LOG.debug("No segments founds for trip: " + tripId);
+				}
 			} catch (Exception e) {
 				LOG.error("Error while fetching segments.");
 				e.printStackTrace();
@@ -211,8 +215,12 @@ public class DatabaseService {
 				selectStatement.setString(1, operator);
 				selectStatement.setString(2, flight);
 				ResultSet rs = selectStatement.executeQuery();
-				rs.next();
-				availableSeats = rs.getInt("available_seats");
+				if (rs.next()) {
+					availableSeats = rs.getInt("available_seats");
+				} else {
+					LOG.debug("No seats available for flight: " + flight + ", operated by: " + operator);
+					return 0;
+				}
 			} catch (Exception e) {
 				LOG.error("Error while fetching seats for flight: " + flight + ", operated by operator: " + operator);
 				e.printStackTrace();
@@ -260,8 +268,10 @@ public class DatabaseService {
 			selectStatement.setString(1, airline);
 			selectStatement.setString(2, flight);
 			ResultSet rs = selectStatement.executeQuery();
-			rs.next();
-			int availableSeats = rs.getInt("available_seats");
+			int availableSeats = 0;
+			if (rs.next()) {
+				availableSeats = rs.getInt("available_seats");
+			}
 			LOG.debug("There are " + availableSeats + " available for flight: " + flight + ", operated by: " + airline);
 			if (availableSeats > 0) {
 				// hold a seat
@@ -315,8 +325,10 @@ public class DatabaseService {
 			PreparedStatement selectStatement = con.prepareStatement(selectQuery);
 			selectStatement.setLong(1, Long.valueOf(tripId));
 			ResultSet rs = selectStatement.executeQuery();
-			rs.next();
-			boolean entryExists = (rs.getInt("booked") > 0);
+			boolean entryExists = false;
+			if (rs.next()) {
+				entryExists = (rs.getInt("booked") > 0);
+			}
 			int status = 0;
 			if (entryExists) {
 				// String concatenation in Sqlite is ||
@@ -405,8 +417,12 @@ public class DatabaseService {
 			selectStatement.setString(1, flight);
 			selectStatement.setString(2, operator);
 			ResultSet rs = selectStatement.executeQuery();
-			rs.next();
-			return rs.getString("hold_time");
+			if (rs.next()) {
+				return rs.getString("hold_time");
+			} else {
+				LOG.debug("No records found in database");
+				return null;
+			}
 		} catch (Exception e) {
 			LOG.error("Error while fetching the hold time from database for flight: " + flight);
 			e.printStackTrace();
@@ -460,8 +476,12 @@ public class DatabaseService {
 		String checkTables = "SELECT name FROM sqlite_master WHERE type='table' AND name = 'flights'";
 		try (PreparedStatement pstmt = con.prepareStatement(checkTables)) {
 			ResultSet rs = pstmt.executeQuery();
-			rs.next();
-			return !"flights".equalsIgnoreCase(rs.getString("name"));
+			if (rs.next()) {
+				return !"flights".equalsIgnoreCase(rs.getString("name"));
+			} else {
+				LOG.debug("No records found in database.");
+				return false;
+			}
 		} catch (Exception e) {
 			LOG.error("Error while checking existing tables.");
 			e.printStackTrace();
