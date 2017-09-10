@@ -47,7 +47,7 @@ public class BookingController extends Controller {
 		aaActor = system.actorOf(AirlineActor.getProps("AA", AirlineActor.NORMAL, databaseService));
 		baActor = system.actorOf(AirlineActor.getProps("BA", AirlineActor.NORMAL, databaseService));
 		caActor = system.actorOf(AirlineActor.getProps("CA", AirlineActor.NORMAL, databaseService));
-		bookingActor = system.actorOf(BookingActor.getProps(aaActor, baActor, caActor, databaseService));
+		bookingActor = system.actorOf(BookingActor.getProps(aaActor, baActor, caActor));
 		LOG.debug("Initialized Booking Controller");
 	}
 

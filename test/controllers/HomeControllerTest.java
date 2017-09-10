@@ -24,7 +24,6 @@ public class HomeControllerTest extends WithApplication {
         Http.RequestBuilder request = new Http.RequestBuilder()
                 .method(GET)
                 .uri("/");
-
         Result result = route(app, request);
         assertEquals(OK, result.status());
     }

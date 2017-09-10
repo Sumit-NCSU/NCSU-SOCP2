@@ -10,7 +10,6 @@ import akka.pattern.Patterns;
 import play.Logger;
 import play.Logger.ALogger;
 import scala.compat.java8.FutureConverters;
-import services.DatabaseService;
 import util.Strings;
 
 /**
@@ -21,18 +20,15 @@ public class BookingActor extends AbstractActor {
 
 	private static final ALogger LOG = Logger.of(BookingActor.class);
 	final ActorRef aaActor, baActor, caActor;
-	final DatabaseService databaseService;
 
-	public BookingActor(ActorRef aaActor, ActorRef baActor, ActorRef caActor, DatabaseService databaseService) {
+	public BookingActor(ActorRef aaActor, ActorRef baActor, ActorRef caActor) {
 		this.aaActor = aaActor;
 		this.baActor = baActor;
 		this.caActor = caActor;
-		this.databaseService = databaseService;
 	}
 
-	public static Props getProps(ActorRef aaActor, ActorRef baActor, ActorRef caActor,
-			DatabaseService databaseService) {
-		return Props.create(BookingActor.class, () -> new BookingActor(aaActor, baActor, caActor, databaseService));
+	public static Props getProps(ActorRef aaActor, ActorRef baActor, ActorRef caActor) {
+		return Props.create(BookingActor.class, () -> new BookingActor(aaActor, baActor, caActor));
 	}
 
 	@Override
