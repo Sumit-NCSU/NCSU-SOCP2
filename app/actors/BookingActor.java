@@ -62,49 +62,6 @@ public class BookingActor extends AbstractActor {
 	}
 
 	/**
-	 * This method tries to book a schedule based on 2PC protocol
-	 * 
-	 * @param schedule
-	 *            the schedule of flights to be booked.
-	 * @return
-	 */
-	private String tryBookSchedule(String[] schedule) {
-		LOG.debug("Trying to book schedule: " + printArray(schedule));
-		String tripId = Strings.BLANK;
-		try {
-			// try hold for all flights
-			for (String flight : schedule) {
-				tripId = sendHoldRequest(getActor(flight), flight);
-				if (Strings.BLANK.equals(tripId)) {
-					LOG.debug("Could not Hold flight: " + flight);
-					break;
-					// at this points, all previous holds can be released after a while.
-				} else {
-					LOG.debug("Hold successful for flight: " + flight + ". Transaction ID: " + tripId);
-				}
-			}
-			if (!Strings.BLANK.equals(tripId)) {
-				// try confirm for all flights
-				for (String flight : schedule) {
-					tripId = sendConfirmRequest(getActor(flight), flight, tripId);
-					if (Strings.BLANK.equals(tripId) || Strings.FAIL.equals(tripId)) {
-						LOG.debug("Could not Confirm flight: " + flight);
-						break;
-						// at this points, all previous holds can be released after a while.
-					} else {
-						LOG.debug("Confirm successful for flight: " + flight + ". Transaction ID: " + tripId);
-					}
-				}
-			}
-		} catch (Exception e) {
-			LOG.debug("Error while booking schedule: " + printArray(schedule));
-			e.printStackTrace();
-			tripId = Strings.BLANK;
-		}
-		return tripId;
-	}
-
-	/**
 	 * 
 	 * @param from
 	 * @param to
@@ -276,6 +233,16 @@ public class BookingActor extends AbstractActor {
 		return tripId;
 	}
 
+	/**
+	 * Method to send a hold request to the given airline actor or the given flight
+	 * 
+	 * @param actor
+	 *            the airline actor
+	 * @param flight
+	 *            the flight name
+	 * @return
+	 * @throws Exception
+	 */
 	private String sendHoldRequest(ActorRef actor, String flight) throws Exception {
 		// catch the timeout exception here to do error handling for the hold request
 		// timeout
@@ -283,6 +250,19 @@ public class BookingActor extends AbstractActor {
 				.thenApply(response -> ((String) response)).toCompletableFuture().get();
 	}
 
+	/**
+	 * Method to send a confirm request to the given airline actor or the given
+	 * flight
+	 * 
+	 * @param actor
+	 *            the airline actor
+	 * @param flight
+	 *            the flight name
+	 * @param tripId
+	 *            the tripId from the successful hold request.
+	 * @return
+	 * @throws Exception
+	 */
 	private String sendConfirmRequest(ActorRef actor, String flight, String tripId) throws Exception {
 		// catch the timeout exception here to do error handling for the confirm request
 		// timeout
@@ -290,6 +270,59 @@ public class BookingActor extends AbstractActor {
 				.thenApply(response -> ((String) response)).toCompletableFuture().get();
 	}
 
+	/**
+	 * This method tries to book a schedule based on 2PC protocol. This is an
+	 * optimized method to avoid the multiple if-else blocks when we are trying to
+	 * book each flight manually separately. Currently this method is not being
+	 * used, because it has not been tested properly.
+	 * 
+	 * @param schedule
+	 *            the schedule of flights to be booked.
+	 * @return
+	 */
+	private String tryBookSchedule(String[] schedule) {
+		LOG.debug("Trying to book schedule: " + printArray(schedule));
+		String tripId = Strings.BLANK;
+		try {
+			// try hold for all flights
+			for (String flight : schedule) {
+				tripId = sendHoldRequest(getActor(flight), flight);
+				if (Strings.BLANK.equals(tripId)) {
+					LOG.debug("Could not Hold flight: " + flight);
+					break;
+					// at this points, all previous holds can be released after a while.
+				} else {
+					LOG.debug("Hold successful for flight: " + flight + ". Transaction ID: " + tripId);
+				}
+			}
+			if (!Strings.BLANK.equals(tripId)) {
+				// try confirm for all flights
+				for (String flight : schedule) {
+					tripId = sendConfirmRequest(getActor(flight), flight, tripId);
+					if (Strings.BLANK.equals(tripId) || Strings.FAIL.equals(tripId)) {
+						LOG.debug("Could not Confirm flight: " + flight);
+						break;
+						// at this points, all previous holds can be released after a while.
+					} else {
+						LOG.debug("Confirm successful for flight: " + flight + ". Transaction ID: " + tripId);
+					}
+				}
+			}
+		} catch (Exception e) {
+			LOG.debug("Error while booking schedule: " + printArray(schedule));
+			e.printStackTrace();
+			tripId = Strings.BLANK;
+		}
+		return tripId;
+	}
+
+	/**
+	 * helper method to get the actor from the flight name. Currently unused.
+	 * 
+	 * @param flight
+	 *            the flight name
+	 * @return
+	 */
 	private ActorRef getActor(String flight) {
 		if (flight.startsWith(Strings.AA)) {
 			return this.aaActor;
@@ -303,6 +336,13 @@ public class BookingActor extends AbstractActor {
 		return null;
 	}
 
+	/**
+	 * Helper method to print the array of schedule. Currently unused.
+	 * 
+	 * @param array
+	 *            the array to be printed
+	 * @return
+	 */
 	private String printArray(String[] array) {
 		String stringValue = Strings.BLANK;
 		if (array != null && array.length > 0) {

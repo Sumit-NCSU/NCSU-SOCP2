@@ -140,7 +140,7 @@ public class BookingController extends Controller {
 			return CompletableFuture
 					.completedFuture(ok(createErrorResponse("From and To should be 'X' and 'Y' respectively")));
 		} else {
-			return FutureConverters.toJava(Patterns.ask(bookingActor, new BookFlight(from, to), 5000))
+			return FutureConverters.toJava(Patterns.ask(bookingActor, new BookFlight(from, to), 15000))
 					.thenApply(response -> parseResponse((String) response));
 		}
 	}

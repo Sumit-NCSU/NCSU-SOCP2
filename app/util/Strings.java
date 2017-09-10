@@ -18,5 +18,6 @@ public class Strings {
 	public static final String NORMAL = "Normal";
 	public static final String FAIL = "Fail";
 	public static final String NO_REPLY = "NoReply";
+	public static final String RETRY = "Retry";
 
 }

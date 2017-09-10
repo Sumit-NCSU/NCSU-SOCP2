@@ -93,8 +93,7 @@ public class AirlineActor extends AbstractActor {
 	private void checkAfter3Seconds(String flight) {
 		LOG.debug(airline + " waited for 3 seconds for Confirm request for " + flight + ". Checking the hold now.");
 		if (waitingForConfirm.contains(flight)) {
-			LOG.debug(airline + " did not receive confirm request for: " + flight
-					+ " => hold was not confirmed. Checking in database");
+			LOG.debug(airline + " still has hold for: " + flight + " => check database.");
 			long currentTime = System.currentTimeMillis();
 			// check in db now
 			String dbHoldTime = databaseService.getHoldTime(airline, flight);
@@ -111,7 +110,7 @@ public class AirlineActor extends AbstractActor {
 			}
 			waitingForConfirm.remove(flight);
 		} else {// if it is not waiting for confirm that means confirm request was received.
-			LOG.debug(airline + " is not waiting for Confirm request for: " + flight + " => hold was confirmed.");
+			LOG.debug(airline + " does not have pending hold for: " + flight + " => hold confirmed previously.");
 		}
 
 	}

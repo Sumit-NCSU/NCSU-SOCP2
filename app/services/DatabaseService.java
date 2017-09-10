@@ -263,14 +263,22 @@ public class DatabaseService {
 		try {
 			con = db.getConnection();
 			// check if seat is available
-			String selectQuery = "SELECT available_seats FROM flights WHERE operator=? AND name=?";
+			// String selectQuery = "SELECT available_seats, hold_time FROM flights WHERE
+			// operator=? AND name=? and hold_time IS NULL";
+			String selectQuery = "SELECT available_seats, hold_time FROM flights WHERE operator=? AND name=?";
 			PreparedStatement selectStatement = con.prepareStatement(selectQuery);
 			selectStatement.setString(1, airline);
 			selectStatement.setString(2, flight);
 			ResultSet rs = selectStatement.executeQuery();
 			int availableSeats = 0;
+			String previousHold = Strings.BLANK;
 			if (rs.next()) {
 				availableSeats = rs.getInt("available_seats");
+				previousHold = rs.getString("hold_time");
+			}
+			if (previousHold != null) {
+				LOG.debug("There is a previous hold on flight: " + flight + " The previous hold_time is: "
+						+ previousHold);
 			}
 			LOG.debug("There are " + availableSeats + " available for flight: " + flight + ", operated by: " + airline);
 			if (availableSeats > 0) {
@@ -351,7 +359,13 @@ public class DatabaseService {
 				PreparedStatement updateStatement = con.prepareStatement(updateQuery);
 				updateStatement.setString(1, flight);
 				status = updateStatement.executeUpdate();
-				LOG.debug("The previous hold flag was released");
+				if (status > 0) {
+					LOG.debug("The hold for " + flight + " was reset by " + airline + " actor for transaction ID: "
+							+ tripId);
+				} else {
+					LOG.debug(
+							"Unable to reset hold for " + flight + " by " + airline + " for transaction ID: " + tripId);
+				}
 			} else {
 				LOG.debug("Could not confirm seat for flight: " + flight + ", with transactionID: " + tripId);
 				tripId = Strings.BLANK;
@@ -392,7 +406,8 @@ public class DatabaseService {
 			createFlights(con, true);
 			createBookings(con);
 		} catch (Exception e) {
-			e.printStackTrace();
+			LOG.debug("could not drop tables while resetting database.");
+			// e.printStackTrace();
 			status = false;
 		} finally {
 			if (con != null) {
